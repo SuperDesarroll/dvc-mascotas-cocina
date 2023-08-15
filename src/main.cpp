@@ -1,10 +1,10 @@
 /*
   Rui Santos
   Complete project details at https://RandomNerdTutorials.com/esp32-cam-post-image-photo-server/
-  
+
   Permission is hereby granted, free of charge, to any person obtaining a copy
   of this software and associated documentation files.
-  
+
   The above copyright notice and this permission notice shall be included in all
   copies or substantial portions of the Software.
 */
@@ -14,53 +14,59 @@
 #include "soc/soc.h"
 #include "soc/rtc_cntl_reg.h"
 #include "esp_camera.h"
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 
-const char* ssid = "LosMuMus";
-const char* password = "Best042022@";
+const char *ssid = "LosMuMus";
+const char *password = "Best042022@";
 
-String serverName = "20.9.14.70";   // REPLACE WITH YOUR Raspberry Pi IP ADDRESS
-//String serverName = "example.com";   // OR REPLACE WITH YOUR DOMAIN NAME
+String serverName = "20.9.14.70"; // REPLACE WITH YOUR Raspberry Pi IP ADDRESS
+// String serverName = "example.com";   // OR REPLACE WITH YOUR DOMAIN NAME
 
-String serverPath = "/upload.php";     // The default serverPath should be upload.php
+String serverPath = "/upload.php"; // The default serverPath should be upload.php
 
 const int serverPort = 80;
 
 WiFiClient client;
+String response;
 
 String sendPhoto();
+void classifyImage(camera_fb_t *fb);
 
 // CAMERA_MODEL_AI_THINKER
-#define PWDN_GPIO_NUM     32
-#define RESET_GPIO_NUM    -1
-#define XCLK_GPIO_NUM      0
-#define SIOD_GPIO_NUM     26
-#define SIOC_GPIO_NUM     27
+#define PWDN_GPIO_NUM 32
+#define RESET_GPIO_NUM -1
+#define XCLK_GPIO_NUM 0
+#define SIOD_GPIO_NUM 26
+#define SIOC_GPIO_NUM 27
 
-#define Y9_GPIO_NUM       35
-#define Y8_GPIO_NUM       34
-#define Y7_GPIO_NUM       39
-#define Y6_GPIO_NUM       36
-#define Y5_GPIO_NUM       21
-#define Y4_GPIO_NUM       19
-#define Y3_GPIO_NUM       18
-#define Y2_GPIO_NUM        5
-#define VSYNC_GPIO_NUM    25
-#define HREF_GPIO_NUM     23
-#define PCLK_GPIO_NUM     22
+#define Y9_GPIO_NUM 35
+#define Y8_GPIO_NUM 34
+#define Y7_GPIO_NUM 39
+#define Y6_GPIO_NUM 36
+#define Y5_GPIO_NUM 21
+#define Y4_GPIO_NUM 19
+#define Y3_GPIO_NUM 18
+#define Y2_GPIO_NUM 5
+#define VSYNC_GPIO_NUM 25
+#define HREF_GPIO_NUM 23
+#define PCLK_GPIO_NUM 22
 
-const int timerInterval = 30000;    // time between each HTTP POST image
-unsigned long previousMillis = 0;   // last time image was sent
+const int timerInterval = 10000;  // time between each HTTP POST image
+unsigned long previousMillis = 0; // last time image was sent
 
-void setup() {
-  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0); 
+void setup()
+{
+  WRITE_PERI_REG(RTC_CNTL_BROWN_OUT_REG, 0);
   Serial.begin(115200);
 
   WiFi.mode(WIFI_STA);
   Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
-  WiFi.begin(ssid, password);  
-  while (WiFi.status() != WL_CONNECTED) {
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED)
+  {
     Serial.print(".");
     delay(500);
   }
@@ -91,107 +97,249 @@ void setup() {
   config.pixel_format = PIXFORMAT_JPEG;
 
   // init with high specs to pre-allocate larger buffers
-  if(psramFound()){
+  if (psramFound())
+  {
     config.frame_size = FRAMESIZE_SVGA;
-    config.jpeg_quality = 10;  //0-63 lower number means higher quality
+    config.jpeg_quality = 10; // 0-63 lower number means higher quality
     config.fb_count = 2;
-  } else {
+  }
+  else
+  {
     config.frame_size = FRAMESIZE_CIF;
-    config.jpeg_quality = 12;  //0-63 lower number means higher quality
+    config.jpeg_quality = 12; // 0-63 lower number means higher quality
     config.fb_count = 1;
   }
-  
+
   // camera init
   esp_err_t err = esp_camera_init(&config);
-  if (err != ESP_OK) {
+  if (err != ESP_OK)
+  {
     Serial.printf("Camera init failed with error 0x%x", err);
     delay(1000);
     ESP.restart();
   }
 
-  sendPhoto(); 
+  sendPhoto();
 }
 
-void loop() {
+void loop()
+{
   unsigned long currentMillis = millis();
-  if (currentMillis - previousMillis >= timerInterval) {
+  if (currentMillis - previousMillis >= timerInterval)
+  {
     sendPhoto();
     previousMillis = currentMillis;
   }
 }
 
-String sendPhoto() {
+String sendPhoto()
+{
   String getAll;
   String getBody;
 
-  camera_fb_t * fb = NULL;
+  camera_fb_t *fb = NULL;
   fb = esp_camera_fb_get();
-  if(!fb) {
+  if (!fb)
+  {
     Serial.println("Camera capture failed");
     delay(1000);
     ESP.restart();
   }
-  
+  classifyImage(fb);
+
   Serial.println("Connecting to server: " + serverName);
 
-  if (client.connect(serverName.c_str(), serverPort)) {
-    Serial.println("Connection successful!");    
+  if (client.connect(serverName.c_str(), serverPort))
+  {
+    Serial.println("Connection successful!");
     String head = "--RandomNerdTutorials\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
     String tail = "\r\n--RandomNerdTutorials--\r\n";
 
     uint32_t imageLen = fb->len;
     uint32_t extraLen = head.length() + tail.length();
     uint32_t totalLen = imageLen + extraLen;
-  
+
     client.println("POST " + serverPath + " HTTP/1.1");
     client.println("Host: " + serverName);
     client.println("Content-Length: " + String(totalLen));
     client.println("Content-Type: multipart/form-data; boundary=RandomNerdTutorials");
     client.println();
     client.print(head);
-  
+
     uint8_t *fbBuf = fb->buf;
     size_t fbLen = fb->len;
-    for (size_t n=0; n<fbLen; n=n+1024) {
-      if (n+1024 < fbLen) {
+    for (size_t n = 0; n < fbLen; n = n + 1024)
+    {
+      if (n + 1024 < fbLen)
+      {
         client.write(fbBuf, 1024);
         fbBuf += 1024;
       }
-      else if (fbLen%1024>0) {
-        size_t remainder = fbLen%1024;
+      else if (fbLen % 1024 > 0)
+      {
+        size_t remainder = fbLen % 1024;
         client.write(fbBuf, remainder);
       }
-    }   
+    }
     client.print(tail);
-    
+
     esp_camera_fb_return(fb);
-    
+
     int timoutTimer = 10000;
     long startTimer = millis();
     boolean state = false;
-    
-    while ((startTimer + timoutTimer) > millis()) {
+
+    while ((startTimer + timoutTimer) > millis())
+    {
       Serial.print(".");
-      delay(100);      
-      while (client.available()) {
+      delay(100);
+      while (client.available())
+      {
         char c = client.read();
-        if (c == '\n') {
-          if (getAll.length()==0) { state=true; }
+        if (c == '\n')
+        {
+          if (getAll.length() == 0)
+          {
+            state = true;
+          }
           getAll = "";
         }
-        else if (c != '\r') { getAll += String(c); }
-        if (state==true) { getBody += String(c); }
+        else if (c != '\r')
+        {
+          getAll += String(c);
+        }
+        if (state == true)
+        {
+          getBody += String(c);
+        }
         startTimer = millis();
       }
-      if (getBody.length()>0) { break; }
+      if (getBody.length() > 0)
+      {
+        break;
+      }
     }
     Serial.println();
     client.stop();
     Serial.println(getBody);
   }
-  else {
-    getBody = "Connection to " + serverName +  " failed.";
+  else
+  {
+    getBody = "Connection to " + serverName + " failed.";
     Serial.println(getBody);
   }
   return getBody;
+}
+
+void classifyImage(camera_fb_t *fb)
+{
+
+  // Capture picture
+
+  //    fb = esp_camera_fb_get();
+
+  if (!fb)
+  {
+    Serial.println(F("Camera capture failed"));
+    return;
+  }
+  else
+  {
+    Serial.println(F("Camera capture OK"));
+  }
+
+  size_t size = fb->len;
+  int len = (int)fb->len;
+
+  String buffer = ""; // base64::encode((uint8_t *)fb->buf, fb->len);
+                      //    buffer.resize(len);
+  for (int i = 0; i < len; i++)
+  {
+    buffer += (char)fb->buf[i];
+  }
+
+  String endpoint = "https://myeyes.cognitiveservices.azure.com//";
+  String subscriptionKey = "070effdc845e4542b99ec2fe31c0c065";
+  String uri = endpoint + "vision/v3.2/describe"; // detect";
+  Serial.println(uri);
+
+  HTTPClient http;
+  http.begin(uri);
+  http.addHeader("Content-Length", (String(len)).c_str());
+  http.addHeader("Content-Type", "application/octet-stream"); // multipart/form-data
+  //    http.addHeader("Content-Type", "multipart/form-data");
+  http.addHeader("Ocp-Apim-Subscription-Key", subscriptionKey);
+  Serial.println(String(len));
+
+  int httpResponseCode = http.POST((buffer));
+  //    esp_camera_fb_return(fb);
+  if (httpResponseCode > 0)
+  {
+    Serial.print(httpResponseCode);
+    Serial.print(F("Returned String: "));
+    response = http.getString();
+    Serial.println(response);
+  }
+  else
+  {
+    Serial.print(F("POST Error: "));
+    Serial.print(httpResponseCode);
+    return;
+  }
+  StaticJsonBuffer<4000> jsonBuffer;
+  // Parse the json response: Arduino assistant
+  JsonObject &doc = jsonBuffer.parseObject(response);
+
+  if (!doc.success())
+  {
+    Serial.println("JSON parsing failed!");
+  }
+
+  /*
+   * https://westus.dev.cognitive.microsoft.com/docs/services/computer-vision-v3-2/operations/56f91f2e778daf14a499f21f
+   {
+    "description": {
+      "tags": [
+        "person",
+        "man",
+        "outdoor",
+        "window",
+        "glasses"
+      ],
+      "captions": [
+        {
+          "text": "Satya Nadella sitting on a bench",
+          "confidence": 0.48293603002174407
+        },
+        {
+          "text": "Satya Nadella is sitting on a bench",
+          "confidence": 0.40037006815422832
+        },
+        {
+          "text": "Satya Nadella sitting in front of a building",
+          "confidence": 0.38035155997373377
+        }
+      ]
+    },
+    "requestId": "ed2de1c6-fb55-4686-b0da-4da6e05d283f",
+    "metadata": {
+      "width": 1500,
+      "height": 1000,
+      "format": "Jpeg"
+    },
+    "modelVersion": "2021-04-01"
+  }
+   */
+
+  int i = 0;
+  while (true)
+  {
+    const char *tags = doc["description"]["tags"][i++];
+
+    if (tags == nullptr)
+      break; // Serial.println("null charachter");
+    Serial.println(tags);
+  }
+  const char *text = doc["description"]["captions"][0]["text"];
+  Serial.println(text);
 }
