@@ -19,6 +19,7 @@
 
 const char *ssid = "LosMuMus";
 const char *password = "Best042022@";
+const char *targetTags[] = {"man", "person", "people"};
 
 String serverName = "20.9.14.70"; // REPLACE WITH YOUR Raspberry Pi IP ADDRESS
 // String serverName = "example.com";   // OR REPLACE WITH YOUR DOMAIN NAME
@@ -52,7 +53,7 @@ void classifyImage(camera_fb_t *fb);
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
 
-const int timerInterval = 10000;  // time between each HTTP POST image
+const int timerInterval = 20000;  // time between each HTTP POST image
 unsigned long previousMillis = 0; // last time image was sent
 
 void setup()
@@ -294,52 +295,50 @@ void classifyImage(camera_fb_t *fb)
   {
     Serial.println("JSON parsing failed!");
   }
-
-  /*
-   * https://westus.dev.cognitive.microsoft.com/docs/services/computer-vision-v3-2/operations/56f91f2e778daf14a499f21f
-   {
-    "description": {
-      "tags": [
-        "person",
-        "man",
-        "outdoor",
-        "window",
-        "glasses"
-      ],
-      "captions": [
-        {
-          "text": "Satya Nadella sitting on a bench",
-          "confidence": 0.48293603002174407
-        },
-        {
-          "text": "Satya Nadella is sitting on a bench",
-          "confidence": 0.40037006815422832
-        },
-        {
-          "text": "Satya Nadella sitting in front of a building",
-          "confidence": 0.38035155997373377
-        }
-      ]
-    },
-    "requestId": "ed2de1c6-fb55-4686-b0da-4da6e05d283f",
-    "metadata": {
-      "width": 1500,
-      "height": 1000,
-      "format": "Jpeg"
-    },
-    "modelVersion": "2021-04-01"
-  }
-   */
-
   int i = 0;
   while (true)
   {
     const char *tags = doc["description"]["tags"][i++];
-
     if (tags == nullptr)
-      break; // Serial.println("null charachter");
-    Serial.println(tags);
+      break;        
+    char *tag;
+    tag = strtok((char *)tags, " "); // Split the tags by space
+    while (tag != NULL)
+    {
+      String tagString = String(tag);
+      Serial.println(tagString);
+      for (int i = 0; i < sizeof(targetTags) / sizeof(targetTags[0]); i++)
+      {
+        if (strcmp(tagString.c_str(), targetTags[i]) == 0)
+        {
+          Serial.println("****** person detected");          
+        }
+      }
+      tag = strtok(NULL, " ");
+    }
   }
-  const char *text = doc["description"]["captions"][0]["text"];
-  Serial.println(text);
+  i=0;
+  while (true)
+  {
+    const char *tags = doc["description"]["captions"][i++]["text"];
+    if (tags == nullptr)
+      break;    
+    char *tag;
+    tag = strtok((char *)tags, " "); // Split the tags by space
+    while (tag != NULL)
+    {
+      String tagString = String(tag);
+      Serial.println(tagString);
+
+      for (int i = 0; i < sizeof(targetTags) / sizeof(targetTags[0]); i++)
+      {
+        if (strcmp(tagString.c_str(), targetTags[i]) == 0)
+        {
+          Serial.println(">>>>>> person detected");          
+        }
+      }
+      tag = strtok(NULL, " ");
+    }
+  }
+  Serial.println("End of tags");
 }
