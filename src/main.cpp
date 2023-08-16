@@ -32,7 +32,7 @@ WiFiClient client;
 String response;
 
 String sendPhoto();
-void classifyImage(camera_fb_t *fb);
+String classifyImage(camera_fb_t *fb);
 
 // CAMERA_MODEL_AI_THINKER
 #define PWDN_GPIO_NUM 32
@@ -146,14 +146,14 @@ String sendPhoto()
     delay(1000);
     ESP.restart();
   }
-  classifyImage(fb);
+  String name=classifyImage(fb);
 
   Serial.println("Connecting to server: " + serverName);
 
   if (client.connect(serverName.c_str(), serverPort))
   {
     Serial.println("Connection successful!");
-    String head = "--RandomNerdTutorials\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"esp32-cam.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
+    String head = "--RandomNerdTutorials\r\nContent-Disposition: form-data; name=\"imageFile\"; filename=\"" + name + ".jpg\"\r\nContent-Type: image/jpeg\r\n\r\n";
     String tail = "\r\n--RandomNerdTutorials--\r\n";
 
     uint32_t imageLen = fb->len;
@@ -232,17 +232,12 @@ String sendPhoto()
   return getBody;
 }
 
-void classifyImage(camera_fb_t *fb)
+String classifyImage(camera_fb_t *fb)
 {
-
-  // Capture picture
-
-  //    fb = esp_camera_fb_get();
-
   if (!fb)
   {
     Serial.println(F("Camera capture failed"));
-    return;
+    return "";
   }
   else
   {
@@ -285,7 +280,7 @@ void classifyImage(camera_fb_t *fb)
   {
     Serial.print(F("POST Error: "));
     Serial.print(httpResponseCode);
-    return;
+    return "";
   }
   StaticJsonBuffer<4000> jsonBuffer;
   // Parse the json response: Arduino assistant
@@ -296,6 +291,8 @@ void classifyImage(camera_fb_t *fb)
     Serial.println("JSON parsing failed!");
   }
   int i = 0;
+  String tags_name="";
+
   while (true)
   {
     const char *tags = doc["description"]["tags"][i++];
@@ -311,13 +308,18 @@ void classifyImage(camera_fb_t *fb)
       {
         if (strcmp(tagString.c_str(), targetTags[i]) == 0)
         {
-          Serial.println("****** person detected");          
+          Serial.println(targetTags[i]);
+          Serial.println(" ****** person detected");          
         }
-      }
-      tag = strtok(NULL, " ");
+      }      
+      tags_name.concat(tagString);
+      tags_name.concat("_");
+      tag = strtok(NULL, " ");      
     }
   }
   i=0;
+  
+  tags_name.concat("@");
   while (true)
   {
     const char *tags = doc["description"]["captions"][i++]["text"];
@@ -329,16 +331,20 @@ void classifyImage(camera_fb_t *fb)
     {
       String tagString = String(tag);
       Serial.println(tagString);
-
       for (int i = 0; i < sizeof(targetTags) / sizeof(targetTags[0]); i++)
       {
         if (strcmp(tagString.c_str(), targetTags[i]) == 0)
         {
-          Serial.println(">>>>>> person detected");          
+          Serial.println(targetTags[i]);
+          Serial.println(" >>>>>> detected");          
         }
       }
+      tags_name.concat(tagString);
+      tags_name.concat("_");
       tag = strtok(NULL, " ");
     }
   }
   Serial.println("End of tags");
+  Serial.println(tags_name);
+  return tags_name;
 }
