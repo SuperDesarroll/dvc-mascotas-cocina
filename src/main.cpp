@@ -18,7 +18,7 @@
 #include <ArduinoJson.h>
 
 const char *ssid = "LosMuMus";
-const char *password = "Best042022@";
+const char *password = "XXXXX";
 const char *targetTags[] = {"cat", "cats", "dog","dogs","person","man"};
 
 String serverName = "20.9.14.70"; // REPLACE WITH YOUR Raspberry Pi IP ADDRESS
