@@ -19,10 +19,9 @@
 
 const char *ssid = "LosMuMus";
 const char *password = "Best042022@";
-const char *targetTags[] = {"man", "person", "people"};
+const char *targetTags[] = {"cat", "cats", "dog","dogs","person","man"};
 
 String serverName = "20.9.14.70"; // REPLACE WITH YOUR Raspberry Pi IP ADDRESS
-// String serverName = "example.com";   // OR REPLACE WITH YOUR DOMAIN NAME
 
 String serverPath = "/upload.php"; // The default serverPath should be upload.php
 
@@ -53,7 +52,9 @@ String classifyImage(camera_fb_t *fb);
 #define HREF_GPIO_NUM 23
 #define PCLK_GPIO_NUM 22
 
-const int timerInterval = 20000;  // time between each HTTP POST image
+#define BUZZER_PIN 15 // ESP32 GIOP15 pin connected to Buzzer's pin
+
+const int timerInterval = 30000;  // time between each HTTP POST image
 unsigned long previousMillis = 0; // last time image was sent
 
 void setup()
@@ -74,6 +75,8 @@ void setup()
   Serial.println();
   Serial.print("ESP32-CAM IP Address: ");
   Serial.println(WiFi.localIP());
+
+  pinMode(BUZZER_PIN, OUTPUT);   
 
   camera_config_t config;
   config.ledc_channel = LEDC_CHANNEL_0;
@@ -232,6 +235,13 @@ String sendPhoto()
   return getBody;
 }
 
+void buz(){
+  digitalWrite(BUZZER_PIN, HIGH); // turn on
+  delay(3000);
+  digitalWrite(BUZZER_PIN, LOW);  // turn off
+  //delay(3000);
+}
+
 String classifyImage(camera_fb_t *fb)
 {
   if (!fb)
@@ -292,7 +302,7 @@ String classifyImage(camera_fb_t *fb)
   }
   int i = 0;
   String tags_name="";
-
+  bool detected=false;
   while (true)
   {
     const char *tags = doc["description"]["tags"][i++];
@@ -309,7 +319,8 @@ String classifyImage(camera_fb_t *fb)
         if (strcmp(tagString.c_str(), targetTags[i]) == 0)
         {
           Serial.println(targetTags[i]);
-          Serial.println(" ****** person detected");          
+          Serial.println(" ****** detected");  
+          detected=true;    
         }
       }      
       tags_name.concat(tagString);
@@ -336,7 +347,8 @@ String classifyImage(camera_fb_t *fb)
         if (strcmp(tagString.c_str(), targetTags[i]) == 0)
         {
           Serial.println(targetTags[i]);
-          Serial.println(" >>>>>> detected");          
+          Serial.println(" >>>>>> detected");    
+          detected=true;  
         }
       }
       tags_name.concat(tagString);
@@ -346,5 +358,11 @@ String classifyImage(camera_fb_t *fb)
   }
   Serial.println("End of tags");
   Serial.println(tags_name);
+  if (detected)
+  {
+    Serial.println("Buz");
+    buz();
+  }
+  
   return tags_name;
 }
